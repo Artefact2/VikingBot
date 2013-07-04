@@ -1,2 +1,4 @@
 config.php
 logs/vikingbot.log
+db/*.db
+
