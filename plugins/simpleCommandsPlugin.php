@@ -1,13 +1,16 @@
 <?php
 
 /**
- * Plugin description
+ * Handle simple commands
  */
-class examplePlugin implements pluginInterface {
+class simpleCommandsPlugin implements pluginInterface {
+	private $socket;
+	private $trigger;
 
 	/** Called when plugins are loaded */
 	function init($config, $socket) {
-
+		$this->socket = $socket;
+		$this->trigger = $config['trigger'];
 	}
 
 	/** Called about twice per second or when there are activity on
@@ -21,7 +24,20 @@ class examplePlugin implements pluginInterface {
 	/** Called when messages are posted on the channel the bot are in,
 	 * or when somebody talks to it. */
 	function onMessage($from, $channel, $msg) {
+		if(stringStartsWith($msg, "{$this->trigger}help")) {
+			sendMessage(
+				$this->socket, $channel, $from
+				.': help, memory, ping, uptime, bc <expr>; prefix with '.$this->trigger
+			);
+			return;
+		}
 
+		if(stringStartsWith($msg, "{$this->trigger}bc")) {
+			$command = escapeshellarg(substr($msg, strlen(($this->trigger)."bc")));
+			$ret = shell_exec('echo '.$command.' | timeout 0.1 bc -lq 2>&1');
+			sendMessage($this->socket, $channel, $from.': '.trim($ret));
+			return;
+		}
 	}
 
 	/** Called when the bot is shutting down */
