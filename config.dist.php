@@ -30,3 +30,6 @@ $config['plugins']['rssReader'] = array(
 $config['plugins']['fileReader'] = array(
         'channel'       => '#vikingbot',
 );
+
+//SDE plugin
+$config['sde']['sqlitedb'] = '/path/to/sde.sqlite';
