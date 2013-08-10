@@ -1,13 +1,15 @@
 <?php
 
-function dfs($src, $tgt, array $schema, array $alreadyused = array('__tgt' => true)) {
+function dfs($src, $tgt, array $schema) {
 	if($src === $tgt) return '';
 
+	if(isset($schema[$tgt][$src])) {
+		return $schema[$tgt][$src];
+	}
+
 	foreach($schema[$tgt] as $intermediate => $join) {
-		if(isset($alreadyused[$intermediate])) continue;
-		$alreadyused[$intermediate] = true;
-		$result = dfs($src, $intermediate, $schema, $alreadyused);
-		unset($alreadyused[$intermediate]);
+		unset($schema[$tgt][$intermediate]);
+		$result = dfs($src, $intermediate, $schema);
 
 		if($result !== false) return $result.' '.$join;
 	}
@@ -46,15 +48,6 @@ class sdePlugin implements pluginInterface {
 			return;
 		}
 
-		if(!preg_match(
-			'%^'.preg_quote($this->trigger, '%').'sde (?<result>type|expression|attribute|effect)s?(\((?<columns>[a-zA-Z,]+)\))? of ((?<source>type|expression|attribute|effect) )(?<sourceid>.+)$%',
-			$msg,
-			$match
-		)) {
-			sendMessage($this->socket, $channel, $from.': invalid syntax.');
-			return;
-		}
-
 		static $sources = [
 			'type' => 'invtypes it',
 			'attribute' => 'dgmattribs da',
@@ -62,6 +55,15 @@ class sdePlugin implements pluginInterface {
 			'expression' => 'dgmexpressions dexp',
 			'group' => 'invgroups ig',
 		];
+
+		if(!preg_match(
+			'%^'.preg_quote($this->trigger, '%').'sde (?<result>'.implode('|', array_keys($sources)).')s?(\((?<columns>[a-zA-Z.,]+)\))? of ((?<source>'.implode('|', array_keys($sources)).') )(?<sourceid>.+)$%',
+			$msg,
+			$match
+		)) {
+			sendMessage($this->socket, $channel, $from.': invalid syntax.');
+			return;
+		}
 
 		static $schema = [
 			'type' => [
