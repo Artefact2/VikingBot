@@ -56,13 +56,35 @@ class sdePlugin implements pluginInterface {
 			'group' => 'invgroups ig',
 		];
 
+		$ors = implode('|', array_keys($sources));
+
+		if($msg === '.sde help') {
+			sendMessage($this->socket, $channel, $from.': .sde [<'.$ors.'>[s][(COL1,COL2,…)] of ]<'.$ors.'>[ ][<name|id>] NAME|ID');
+			sendMessage($this->socket, $channel, $from.': .sde [COLUMN of ]<'.$ors.'>[ ][<name|id>] NAME|ID');
+			return;
+		}
+
 		if(!preg_match(
-			'%^'.preg_quote($this->trigger, '%').'sde (?<result>'.implode('|', array_keys($sources)).')s?(\((?<columns>[a-zA-Z.,]+)\))? of ((?<source>'.implode('|', array_keys($sources)).') )(?<sourceid>.+)$%',
+			'%^'.preg_quote($this->trigger, '%').'sde '
+			.'((((?<result>'.$ors.')s?(\((?<columns>[a-zA-Z.,]+)\))?)|(?<column>[a-z]+))\s+of\s+)?'
+			.'(?<source>'.$ors.')(\s*(?<sourcetype>name|id))?\s+(?<sourceid>.+)'
+			.'$%',
 			$msg,
 			$match
 		)) {
 			sendMessage($this->socket, $channel, $from.': invalid syntax.');
 			return;
+		}
+
+		if(!$match['result']) {
+			$match['result'] = $match['source'];
+		}
+
+		if(!$match['columns'] && $match['column']) {
+			$col = $match['column'];
+			$prefix = explode(' ', $sources[$match['result']], 2)[1];
+
+			$match['columns'] = "{$prefix}.{$col}";
 		}
 
 		static $schema = [
@@ -97,7 +119,17 @@ class sdePlugin implements pluginInterface {
 			],
 		];
 
-		if($match['columns']) $statement = 'SELECT '.$match['columns'];
+		static $hccolumns = [
+			'typeid' => 'it.typeid',
+			'effectid' => 'de.effectid',
+			'attributeid' => 'da.attributeid',
+			'groupid' => 'ig.groupid',
+			'expressionid' => 'dexp.expressionid',
+		];
+
+		if($match['columns']) {
+			$statement = 'SELECT '.$match['columns'];
+		}
 		else $statement = 'SELECT *';
 
 		$joins = dfs($match['source'], $match['result'], $schema);
@@ -117,12 +149,15 @@ class sdePlugin implements pluginInterface {
 		$statement .= ' FROM '.$sources[$match['result']]
 			.' '.$joins." WHERE ".$where;
 
+		var_dump($statement);
 		@$q = $this->sqlite->query($statement);
 		$rows = [];
 
 		if($q instanceof SQLite3Result) {
-			while($rows[] = $q->fetchArray(SQLITE3_ASSOC));
-			array_pop($rows);
+			while($row = $q->fetchArray(SQLITE3_ASSOC)) {
+				if(count($row) > 1) $rows[] = $row;
+				else $rows[] = array_pop($row);
+			}
 		} else {
 			sendMessage($this->socket, $channel, $from.': invalid query.');
 			return;
@@ -133,8 +168,13 @@ class sdePlugin implements pluginInterface {
 			return;
 		}
 
-		$reply = json_encode($rows);
-		if(strlen($reply) < 80) {
+		if(is_array($rows[0])) {
+			$reply = json_encode($rows);
+		} else {
+			$reply = implode(', ', $rows);
+		}
+
+		if(strlen($reply) < 150) {
 			sendMessage($this->socket, $channel, $from.': '.$reply);
 			return;
 		} else {
